@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function approvedProvider() {
+      return signedIn() &&
+        userDoc().verificationStatus == 'approved' &&
+        userDoc().role in ['provider', 'event'];
+    }
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      // Clients may create basic profile fields only. Never allow self-approval.
+      allow create: if isOwner(uid) &&
+        request.resource.data.verificationStatus == 'phone_verified' &&
+        request.resource.data.role == 'customer';
+      allow update: if isOwner(uid) &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['isAdmin', 'approvedAt']) &&
+        (request.resource.data.verificationStatus == resource.data.verificationStatus ||
+         request.resource.data.verificationStatus == 'pending_review');
+      match /requests/{requestId} {
+        allow read, create: if isOwner(uid);
+        allow update, delete: if false;
+      }
+    }
+    match /foodListings/{listingId} {
+      allow read: if true;
+      allow create: if approvedProvider() &&
+        request.resource.data.providerUid == request.auth.uid &&
+        request.resource.data.status == 'available';
+      allow update: if signedIn() &&
+        resource.data.providerUid == request.auth.uid &&
+        approvedProvider();
+      allow delete: if signedIn() && resource.data.providerUid == request.auth.uid;
+    }
+    match /verificationRequests/{requestId} {
+      allow create: if signedIn() &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+}

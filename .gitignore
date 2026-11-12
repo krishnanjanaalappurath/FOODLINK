@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+local.properties
+google-services.json
+node_modules/
+dist/
+build/
