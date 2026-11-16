@@ -3,7 +3,7 @@ import * as db from './db';
 const DISC="FOODLINK is a platform that facilitates connections between food providers and recipients. Food preparation, handling, storage, quality, allergen information, hygiene, packaging and food safety remain the responsibility of the respective food provider. Users should review the available food information and make informed decisions before accepting or consuming food. FOODLINK does not independently certify the safety or quality of listed food.";
 const fmt=t=>t?new Date(t).toLocaleString([],{dateStyle:'medium',timeStyle:'short'}):'n/a';
 const CATS=['Bakery','Meals','Produce','Drinks','Other'];
-const CONSENTS=["I understand FOODLINK is an intermediary platform and does not prepare, inspect, store or supply food.","I understand food is provided by independent restaurants and bakeries.","I will review food descriptions, allergen information, storage instructions and collection deadlines.","I understand the food provider is responsible for preparation, handling and food safety.","I will follow the collection, storage and consumption instructions given.","I have read the Terms and Privacy Policy."];
+const CONSENTS=["I understand FOODLINK is an intermediary platform and does not prepare, inspect, store or supply food.","I understand food and produce are provided by independent food providers.","I will review food descriptions, allergen information, storage instructions and collection deadlines.","I understand the food provider is responsible for preparation, handling and food safety.","I will follow the collection, storage and consumption instructions given.","I have read the Terms and Privacy Policy."];
 const F=({l,children})=><label className="f"><span>{l}</span>{children}</label>;
 const Disc=()=><p className="disc" role="note"><b>Food safety notice. </b>{DISC}</p>;
 
@@ -112,11 +112,11 @@ function Auth({mode,act,done,go}){
  const admin=mode==='admin',reg=mode==='register';
  const [f,setF]=useState({role:'customer',type:''});
  const s=k=>e=>setF({...f,[k]:e.target.value});
- const biz=f.role==='business';
+ const biz=f.role==='business';const vendor=biz||f.role==='produce';
  const [busy,setBusy]=useState(false);
  const submit=async e=>{
   e.preventDefault();setBusy(true);
-  const data={...f,role:biz?(f.type==='Bakery'?'bakery':'restaurant'):f.role};
+  const data={...f,role:biz?(f.type==='Bakery'?'bakery':'restaurant'):f.role,type:f.role==='produce'?'Fruit & Vegetable Vendor':f.type};
   await act(()=>reg?db.register({pw:'',name:'',email:'',...data}):db.login(f.email||'',f.pw||'',admin));
   setBusy(false);
  };
@@ -126,14 +126,14 @@ function Auth({mode,act,done,go}){
    <F l="Account type">
     <select value={f.role} onChange={s('role')}>
      <option value="customer">Customer</option>
-     <option value="business">Business</option>
+     <option value="business">Business</option><option value="produce">Fruit &amp; Vegetable Vendor</option>
      <option value="ngo">NGO</option>
     </select>
    </F>
-   <F l={biz?'Business name':f.role==='ngo'?'Organisation name':'Full name'}>
+   <F l={vendor?'Business name':f.role==='ngo'?'Organisation name':'Full name'}>
     <input required onChange={s('name')}/>
    </F>
-   <F l="Phone"><input required={biz} type="tel" onChange={s('phone')}/></F>
+   <F l="Phone"><input required={vendor} type="tel" onChange={s('phone')}/></F>
    {biz&&<>
     <F l="Business type">
      <select required value={f.type} onChange={s('type')}>
@@ -150,7 +150,7 @@ function Auth({mode,act,done,go}){
   <F l="Password (8+ characters)">
    <input required type="password" minLength={8} autoComplete={reg?'new-password':'current-password'} onChange={s('pw')}/>
   </F>
-  {reg&&biz&&<>
+  {reg&&vendor&&<>
    <p className="hint">Your application stays Pending until an admin approves it.</p>
    <F l="Owner / contact person"><input required onChange={s('contact')}/></F>
    <F l="Business address and location"><input required onChange={s('address')}/></F>
@@ -165,10 +165,10 @@ function Auth({mode,act,done,go}){
  </form>;
 }
 
-function Card({l,children}){return <article className="card">{l.img&&<img src={l.img} alt={l.name}/>}<h3>{l.name}</h3><p className="muted">{l.bizName} · {l.location}</p><p>{l.desc}</p>
- <p><s>{l.orig.toFixed(2)}</s> <b className="price">{l.price.toFixed(2)}</b> · {l.qty} left</p>
- <p className="small">Made {fmt(l.made)} · Collect by {fmt(l.deadline)}{l.useBy?` · Use by ${fmt(l.useBy)}`:''}</p>
- <p className="small"><b>Allergens:</b> {l.allergens}. <b>Storage:</b> {l.storage||'Not stated; ask the provider'}.</p><p className="small safe">Food safety is the provider's responsibility. Check details before collecting.</p>{children}</article>}
+function Card({l,children}){const produce=l.listingType==='produce';return <article className="card">{l.img&&<img src={l.img} alt={l.name}/>}<h3>{l.name}</h3><p className="muted">{l.bizName} · {l.location}</p><p>{l.desc}</p>
+ <p><s>{l.orig.toFixed(2)}</s> <b className="price">{l.price.toFixed(2)}</b> · {l.qty} {produce?'kg':'left'}</p>
+ <p className="small">{produce?`Harvested ${fmt(l.harvestDate)}`:`Made ${fmt(l.made)}`} · Collect by {fmt(l.deadline)}{l.useBy?` · Use by ${fmt(l.useBy)}`:''}</p>
+ <p className="small">{!produce&&<><b>Allergens:</b> {l.allergens}. </>}<b>Storage:</b> {l.storage||'Not stated; ask the provider'}.</p><p className="small safe">Food safety is the provider's responsibility. Check details before collecting.</p>{children}</article>}
 
 function Shop({u,act,flash}){
  const [tab,setTab]=useState('browse'),[q,setQ]=useState(''),[cat,setCat]=useState(''),[max,setMax]=useState(''),[ask,setAsk]=useState(null);const ngo=u.role==='ngo';
@@ -231,18 +231,18 @@ function Biz({u,act,flash}){
  const [tab,setTab]=useState('l'),[f,setF]=useState({category:'Meals'});const s=k=>e=>setF({...f,[k]:e.target.value});
  if(u.status!=='approved')return <div className="card narrow"><h2>Application {u.status}</h2><p>{u.status==='pending'?'An admin is reviewing your application. You can publish food once it is approved.':u.status==='rejected'?'Your application was rejected.':'Your account is suspended.'}</p>{u.feedback&&<p><b>Admin feedback:</b> {u.feedback}</p>}</div>;
  const d=db.load(),ls=d.listings.filter(l=>l.bizId===u.id),rs=d.reservations.filter(r=>r.bizId===u.id).reverse();
- const pub=async e=>{e.preventDefault();const T=k=>f[k]?new Date(f[k]).getTime():0;if(await act(()=>db.saveListing(u,{...f,made:T('made'),deadline:T('deadline'),useBy:T('useBy')||null})))flash('Listing published.')};
+ const pub=async e=>{e.preventDefault();const T=k=>f[k]?new Date(f[k]).getTime():0;if(await act(()=>db.saveListing(u,{...f,category:u.role==='produce'?'Produce':f.category,made:T('made'),harvestDate:T('harvestDate'),deadline:T('deadline'),useBy:T('useBy')||null})))flash('Listing published.')};
  const img=e=>{const x=e.target.files[0];if(!x)return;if(x.size>2e5){flash('Image must be under 200 KB in demo mode.',true);return}const r=new FileReader();r.onload=()=>setF(prev=>({...prev,img:r.result}));r.onerror=()=>flash('Could not read this image. Please try another.',true);r.readAsDataURL(x)};
  return <><div className="tabs"><button className={tab==='l'?'on':''} onClick={()=>setTab('l')}>Listings</button><button className={tab==='r'?'on':''} onClick={()=>setTab('r')}>Reservations ({rs.filter(r=>r.status==='pending').length} new)</button></div>
- {tab==='l'&&<><form className="card narrow" onSubmit={pub}><h3>New surplus listing</h3><F l="Food name"><input required onChange={s('name')}/></F><F l="Description"><textarea required onChange={s('desc')}/></F><F l="Category"><select value={f.category} onChange={s('category')}>{CATS.map(c=><option key={c}>{c}</option>)}</select></F>
-  <F l="Quantity"><input required type="number" min="1" onChange={s('qty')}/></F><F l="Original price"><input required type="number" min="0" step="0.01" onChange={s('orig')}/></F><F l="Discounted price"><input required type="number" min="0" step="0.01" onChange={s('price')}/></F>
-  <F l="Prepared at"><input required type="datetime-local" onChange={s('made')}/></F><F l="Pickup deadline"><input required type="datetime-local" onChange={s('deadline')}/></F><F l="Use-by (optional)"><input type="datetime-local" onChange={s('useBy')}/></F>
-  <F l="Allergens (required)"><input required placeholder="e.g. Gluten, milk, or None" onChange={s('allergens')}/></F><F l="Storage instructions"><input onChange={s('storage')}/></F><F l="Photo (under 200 KB)"><input type="file" accept="image/*" onChange={img}/></F>{f.img&&<img src={f.img} alt="Selected food preview" style={{width:'100%',maxHeight:220,objectFit:'cover',borderRadius:12,marginBottom:16}}/>}<button>Publish listing</button></form>
-  {ls.length?ls.map(l=><div className="card row" key={l.id}><div><b>{l.name}</b> · {l.qty} left · {l.status}<p className="small">Deadline {fmt(l.deadline)}</p></div><div><button className="ghost" onClick={()=>{const q=+prompt('New available quantity',l.qty);if(q>=0)act(()=>db.setListing(u,l.id,{qty:q}))}}>Edit qty</button><button className="ghost" onClick={()=>act(()=>db.setListing(u,l.id,{status:l.status==='active'?'paused':'active'}))}>{l.status==='active'?'Pause':'Resume'}</button><button className="ghost" onClick={()=>act(()=>db.setListing(u,l.id,'delete'))}>Delete</button></div></div>):<p className="empty">No listings yet. Publish your first surplus item above.</p>}</>}
+ {tab==='l'&&<><form className="card narrow" onSubmit={pub}><h3>New surplus listing</h3><F l="Food name"><input required onChange={s('name')}/></F><F l="Description"><textarea required onChange={s('desc')}/></F>{u.role==='produce'?<F l="Category"><input value="Produce" readOnly/></F>:<F l="Category"><select value={f.category} onChange={s('category')}>{CATS.map(c=><option key={c}>{c}</option>)}</select></F>}
+  <F l={u.role==='produce'?'Quantity (whole kg)':'Quantity'}><input required type="number" min="1" step="1" onChange={s('qty')}/></F><F l="Original price (₹)"><input required type="number" min="0" step="0.01" onChange={s('orig')}/></F><F l="Discounted price (₹)"><input required type="number" min="0" step="0.01" onChange={s('price')}/></F>
+  {u.role==='produce'?<F l="Harvest date"><input required type="date" onChange={s('harvestDate')}/></F>:<><F l="Prepared at"><input required type="datetime-local" onChange={s('made')}/></F><F l="Use-by (optional)"><input type="datetime-local" onChange={s('useBy')}/></F><F l="Allergens (required)"><input required placeholder="e.g. Gluten, milk, or None" onChange={s('allergens')}/></F></>}
+  <F l="Pickup deadline"><input required type="datetime-local" onChange={s('deadline')}/></F><F l="Storage instructions"><input onChange={s('storage')}/></F><F l="Photo (under 200 KB)"><input type="file" accept="image/*" onChange={img}/></F>{f.img&&<img src={f.img} alt="Selected food preview" style={{width:'100%',maxHeight:220,objectFit:'cover',borderRadius:12,marginBottom:16}}/>}<button>Publish listing</button></form>
+  {ls.length?ls.map(l=><div className="card row" key={l.id}><div><b>{l.name}</b> · {l.qty} {u.role==='produce'?'kg':'left'} · {l.status}<p className="small">Deadline {fmt(l.deadline)}</p></div><div><button className="ghost" onClick={()=>{const q=+prompt('New available quantity',l.qty);if(q>=0)act(()=>db.setListing(u,l.id,{qty:q}))}}>Edit qty</button><button className="ghost" onClick={()=>act(()=>db.setListing(u,l.id,{status:l.status==='active'?'paused':'active'}))}>{l.status==='active'?'Pause':'Resume'}</button><button className="ghost" onClick={()=>act(()=>db.setListing(u,l.id,'delete'))}>Delete</button></div></div>):<p className="empty">No listings yet. Publish your first surplus item above.</p>}</>}
  {tab==='r'&&(rs.length?rs.map(r=><div className="card row" key={r.id}><div><b>{r.name}</b> × {r.qty} for {r.userName} ({r.kind})<p className="small">{fmt(r.at)}</p></div><div><span className={'st '+r.status}>{r.status}</span>{r.status==='pending'&&<button onClick={()=>act(()=>db.setRes(u,r.id,'confirmed'))}>Confirm</button>}{r.status==='confirmed'&&<button onClick={()=>act(()=>db.setRes(u,r.id,'collected'))}>Mark collected</button>}{['pending','confirmed'].includes(r.status)&&<button className="ghost" onClick={()=>act(()=>db.setRes(u,r.id,'cancelled'))}>Cancel</button>}</div></div>):<p className="empty">No reservations yet.</p>)}</>}
 
 function Admin({u,act}){
- const d=db.load(),[why,setWhy]=useState({});const biz=d.users.filter(x=>['restaurant','bakery'].includes(x.role)),pend=biz.filter(x=>x.status==='pending');
+ const d=db.load(),[why,setWhy]=useState({});const biz=d.users.filter(x=>['restaurant','bakery','produce'].includes(x.role)),pend=biz.filter(x=>x.status==='pending');
  const stat=[['Users',d.users.length],['Pending applications',pend.length],['Active listings',d.listings.filter(l=>l.status==='active').length],['Reservations / requests',d.reservations.length]];
  return <><div className="grid">{stat.map(([a,b])=><div className="card" key={a}><h3>{b}</h3><p>{a}</p></div>)}</div>
  <h2>Applications awaiting review ({pend.length})</h2>{pend.length?pend.map(x=><div className="card" key={x.id}><b>{x.name}</b> ({x.role}) · {x.email} · {x.phone}<p className="small">Contact: {x.biz.contact} · {x.biz.address} · Type: {x.biz.type} · Licence: {x.biz.licence} · Document: {x.biz.docs} {d.docs.find(z=>z.id===x.id)?<a download={x.biz.docs} href={d.docs.find(z=>z.id===x.id).data}>Download</a>:null}</p>
