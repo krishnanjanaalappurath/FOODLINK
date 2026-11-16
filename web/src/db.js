@@ -25,7 +25,7 @@ async function start(user){
   watch(col('users'),s=>C.users=rows(s));watch(col('listings'),s=>ls.pub=rows(s));watch(col('reservations'),s=>C.reservations=rows(s,fixRes));
   watch(col('consents'),s=>C.consents=rows(s));watch(col('reports'),s=>C.reports=rows(s));watch(col('businessDocs'),s=>C.docs=rows(s));isReady=true;emit();return}
  if(!prof.exists()){me=null;isReady=true;emit();return}
- const role=prof.data().role,biz=role==='restaurant'||role==='bakery';
+ const role=prof.data().role,biz=['restaurant','bakery','produce'].includes(role);
  watch(doc(fs,'users',user.uid),s=>{me=s.exists()?{...s.data(),id:s.id}:null;C.users=me?[me]:[]});
  watch(query(col('listings'),where('status','==','active')),s=>ls.pub=rows(s));
  watch(query(col('consents'),where('userId','==',user.uid)),s=>C.consents=rows(s));
@@ -41,8 +41,8 @@ export const errText=x=>({'auth/invalid-credential':'Wrong email or password.','
 export const readFile=(f,max)=>new Promise((ok,no)=>{if(f.size>max)return no(new Error(`File must be under ${Math.round(max/1000)} KB.`));const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>no(new Error('Could not read file.'));r.readAsDataURL(f)});
 export const logout=()=>auth&&signOut(auth);
 
-export async function register(f){const em=f.email.trim().toLowerCase(),biz=f.role==='restaurant'||f.role==='bakery';
- need(['customer','restaurant','bakery','ngo'].includes(f.role),'Choose a valid account type.'); // admin can never self-register
+export async function register(f){const em=f.email.trim().toLowerCase(),biz=['restaurant','bakery','produce'].includes(f.role);
+ need(['customer','restaurant','bakery','produce','ngo'].includes(f.role),'Choose a valid account type.'); // admin can never self-register
  need(/^\S+@\S+\.\S+$/.test(em),'Enter a valid email.');need(f.pw.length>=8,'Password needs 8+ characters.');need(f.name.trim(),'Name is required.');
  if(biz){for(const k of['contact','phone','address','type','licence'])need(f[k]?.trim(),`Business field missing: ${k}.`);need(f.file,'Attach a supporting document.')}
  const data=biz?await readFile(f.file,5e5):null;registering=true;let cred;
@@ -63,10 +63,10 @@ export async function login(email,pw,admin){const c=await signInWithEmailAndPass
  if(bad){await signOut(auth);throw new Error(bad)}}
 
 export async function saveListing(u,f){const qty=+f.qty,orig=+f.orig,price=+f.price;
- need(['restaurant','bakery'].includes(u.role)&&u.status==='approved','Only approved businesses can publish.');
- need(f.name?.trim()&&f.desc?.trim()&&f.allergens?.trim(),'Name, description and allergens are required.');
+ need(['restaurant','bakery','produce'].includes(u.role)&&u.status==='approved','Only approved providers can publish.');
+ need(f.name?.trim()&&f.desc?.trim(),'Name and description are required.');need(u.role==='produce'||f.allergens?.trim(),'Allergens are required for prepared food listings.');
  need(Number.isInteger(qty)&&qty>0&&orig>0&&price>=0&&price<=orig,'Check quantity and prices (discount must not exceed original).');need(f.deadline>Date.now(),'Pickup deadline must be in the future.');
- await addDoc(collection(fs,'listings'),{bizId:u.id,bizName:u.name,location:u.biz.address,status:'active',listed:Date.now(),name:f.name.trim(),desc:f.desc.trim(),category:f.category||'Other',qty,orig,price,made:f.made||0,deadline:f.deadline,useBy:f.useBy||null,allergens:f.allergens.trim(),storage:f.storage||'',img:f.img||null,createdAt:serverTimestamp()})}
+ await addDoc(collection(fs,'listings'),{bizId:u.id,bizName:u.name,location:u.biz.address,status:'active',listed:Date.now(),name:f.name.trim(),desc:f.desc.trim(),category:f.category||'Other',qty,orig,price,listingType:u.role==='produce'?'produce':'prepared',qtyUnit:u.role==='produce'?'kg':'items',made:u.role==='produce'?0:(f.made||0),harvestDate:u.role==='produce'?(f.harvestDate||null):null,deadline:f.deadline,useBy:u.role==='produce'?null:(f.useBy||null),allergens:u.role==='produce'?'':(f.allergens||'').trim(),storage:f.storage||'',img:f.img||null,createdAt:serverTimestamp()})}
 export async function setListing(u,id,p){const r=doc(fs,'listings',id);if(p==='delete')return deleteDoc(r);
  if('qty' in p)need(Number.isInteger(p.qty)&&p.qty>=0,'Quantity must be a whole number, 0 or more.');await updateDoc(r,p)}
 export async function consent(u){if(hasConsent(u.id))return;await setDoc(doc(fs,'consents',`${u.id}_${CONSENT_VERSION}`),{userId:u.id,version:CONSENT_VERSION,at:serverTimestamp()})}

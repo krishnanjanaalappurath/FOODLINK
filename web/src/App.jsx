@@ -15,7 +15,10 @@ export default function App(){
  const P={u,act,flash};const out=()=>{db.logout();setView('home')};
  if(!db.configured)return <main><div className="card narrow"><h2>Firebase is not configured</h2><p>Copy .env.example to .env, fill in your Firebase web app values, then restart. See README.</p></div></main>;
  return <>
-  <header><b className="brand" onClick={()=>!u&&setView('home')}>FOODLINK</b>
+  <header><b className="brand" onClick={()=>!u&&setView('home')}>
+  <img className="brand-mark" src={`${import.meta.env.BASE_URL}foodlink-logo.svg`} alt="" />
+  FOODLINK
+</b>
    <nav>{u?<><span className="badge">{u.role}</span><button className="ghost" onClick={out}>Sign out</button></>:<><button className="ghost" onClick={()=>setView('login')}>Log in</button><button onClick={()=>setView('register')}>Register</button></>}</nav></header>
   {toast&&<div className={'toast '+(toast.bad?'bad':'')} role="alert">{toast.m}</div>}
   <main>{!db.ready()?<p className="empty">Loading…</p>:!u?(view==='home'?<Home go={setView}/>:<Auth key={view} mode={view} act={act} go={setView}/>)
@@ -25,31 +28,86 @@ export default function App(){
 
 
 function Home({go}) {
- return (
-  <section className="hero">
-   <h1>FOODLINK</h1>
-   <p>Good food. Not wasted.</p>
-   <p>Fresh opportunities. Less food waste.</p>
+  return (
+    <div className="home-shell">
+      <section className="home-hero">
+        <div className="home-hero-copy">
+          <span className="home-eyebrow">A LITTLE GOOD GOES A LONG WAY</span>
+          <h1>Good food.<br /><em>Less waste.</em><br />More good.</h1>
+          <p className="home-intro">
+            Bringing surplus food and the people who need it closer together.
+            Discover good food, support local businesses and help reduce food waste.
+          </p>
+          <div className="home-actions">
+            <button onClick={() => go('register')}>Get started <span>↗</span></button>
+            <button className="home-secondary" onClick={() => go('login')}>Log in</button>
+          </div>
+          <p className="home-note">A small choice can make a meaningful difference.</p>
+        </div>
 
-   <form onSubmit={e=>{
-    e.preventDefault();
-    go('login');
-   }}>
-    <button type="submit">Sign in with email</button>
-   </form>
+        <div className="home-art">
+          <div className="home-art-circle"></div>
+          <span className="home-art-sun">✳</span>
+          <span className="home-art-leaf leaf-one">❧</span>
+          <span className="home-art-leaf leaf-two">❧</span>
+          <div className="home-food-illustration">
+            <span className="food-fruit">🍊</span>
+            <span className="food-leaf">🥬</span>
+            <span className="food-bread">🥖</span>
+          </div>
+          <span className="home-art-caption">Good food deserves<br />a second chance.</span>
+        </div>
+        <span className="home-side-note">GOOD FOOD · GOOD PURPOSE · GOOD COMMUNITY</span>
+      </section>
 
-   <p className="hint">
-    New to FOODLINK?
-    {' '}
-    <a href="#register" onClick={e=>{
-     e.preventDefault();
-     go('register');
-    }}>Create an account</a>
-   </p>
-  </section>
- );
+      <section className="home-story">
+        <div>
+          <span className="home-eyebrow">THE IDEA BEHIND FOODLINK</span>
+          <h2>Food is too good<br />to go to waste.</h2>
+        </div>
+        <p>
+          Every day, perfectly good food can go unsold. FOODLINK helps connect
+          food providers with customers and organisations, giving surplus food
+          another opportunity to be enjoyed.
+        </p>
+      </section>
+
+      <section className="home-steps">
+        <div className="home-section-heading">
+          <span className="home-eyebrow">A SIMPLE WAY TO MAKE A DIFFERENCE</span>
+          <h2>Good things happen<br />when we connect.</h2>
+        </div>
+        <div className="home-step-grid">
+          <article className="home-step">
+            <span className="home-step-icon">⌕</span>
+            <span className="home-step-number">01 / DISCOVER</span>
+            <h3>Find good food</h3>
+            <p>Explore available surplus food from participating local providers.</p>
+          </article>
+          <article className="home-step">
+            <span className="home-step-icon">♡</span>
+            <span className="home-step-number">02 / SHARE</span>
+            <h3>Give food a chance</h3>
+            <p>Providers can list suitable surplus food for others to discover.</p>
+          </article>
+          <article className="home-step">
+            <span className="home-step-icon">✳</span>
+            <span className="home-step-number">03 / MAKE AN IMPACT</span>
+            <h3>Waste a little less</h3>
+            <p>Every successful connection is a step towards a more thoughtful food community.</p>
+          </article>
+        </div>
+      </section>
+
+      <section className="home-bottom">
+        <span className="home-eyebrow">BE PART OF SOMETHING GOOD</span>
+        <h2>Let's make every<br />meal matter.</h2>
+        <p>Join the FOODLINK community.</p>
+        <button onClick={() => go('register')}>Create your account <span>↗</span></button>
+      </section>
+    </div>
+  );
 }
-
 function Auth({mode,act,done,go}){
  const admin=mode==='admin',reg=mode==='register';
  const [f,setF]=useState({role:'customer',type:''});

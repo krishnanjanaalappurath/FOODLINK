@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <circle cx="100" cy="100" r="96" fill="#526b50"/>
+  <g fill="none" stroke="#fffdf5" stroke-width="5"
+     stroke-linecap="round" stroke-linejoin="round">
+    <!-- Bowl -->
+    <path d="M43 105 Q48 157 100 157 Q152 157 157 105 Z"/>
+    <path d="M37 105 H163"/>
+    <path d="M68 158 Q100 170 132 158"/>
+    <!-- Fruit -->
+    <path d="M76 99 C58 85 66 59 84 61 C94 61 99 70 100 75 C103 63 118 59 127 68 C141 83 123 102 100 105"/>
+    <path d="M98 76 Q88 56 78 57"/>
+    <path d="M78 57 Q91 44 105 57 Q91 65 78 57"/>
+    <!-- Leafy vegetable -->
+    <path d="M112 100 Q103 75 120 51 Q143 59 139 82 Q135 96 112 100 Z"/>
+    <path d="M112 100 Q123 78 133 62"/>
+    <!-- Small round fruit -->
+    <circle cx="61" cy="91" r="12"/>
+    <path d="M61 79 Q58 70 65 66"/>
+    <!-- Vegetable leaves -->
+    <path d="M87 103 Q75 83 58 81 Q59 100 87 103"/>
+    <path d="M87 103 Q82 84 91 73"/>
+  </g>
+</svg>
