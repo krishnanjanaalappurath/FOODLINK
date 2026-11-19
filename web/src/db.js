@@ -37,7 +37,7 @@ export const load=()=>C,session=()=>me,ready=()=>isReady;
 export const listings=()=>C.listings.filter(l=>l.status==='active'&&l.qty>0&&l.deadline>Date.now());
 export const hasConsent=id=>C.consents.some(c=>c.userId===id&&c.version===CONSENT_VERSION);
 const need=(c,m)=>{if(!c)throw new Error(m)};
-export const errText=x=>({'auth/invalid-credential':'Wrong email or password.','auth/email-already-in-use':'Email already registered.','auth/too-many-requests':'Too many attempts. Try again later.','auth/network-request-failed':'Network error.','permission-denied':'Not allowed by security rules.'}[x.code]||x.message);
+export const errText=x=>`${x.code||'unknown'}: ${x.message||String(x)}`;
 export const readFile=(f,max)=>new Promise((ok,no)=>{if(f.size>max)return no(new Error(`File must be under ${Math.round(max/1000)} KB.`));const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>no(new Error('Could not read file.'));r.readAsDataURL(f)});
 export const logout=()=>auth&&signOut(auth);
 
