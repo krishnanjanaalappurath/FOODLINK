@@ -112,11 +112,11 @@ function Auth({mode,act,done,go}){
  const admin=mode==='admin',reg=mode==='register';
  const [f,setF]=useState({role:'customer',type:''});
  const s=k=>e=>setF({...f,[k]:e.target.value});
- const biz=f.role==='business';const vendor=biz||f.role==='produce';
+ const biz=f.role==='business';const eventTeam=f.role==='event';const household=f.role==='household';const vendor=biz||f.role==='produce'||eventTeam;
  const [busy,setBusy]=useState(false);
  const submit=async e=>{
   e.preventDefault();setBusy(true);
-  const data={...f,role:biz?(f.type==='Bakery'?'bakery':'restaurant'):f.role,type:f.role==='produce'?'Fruit & Vegetable Vendor':f.type};
+  const data={...f,role:biz?(f.type==='Bakery'?'bakery':'restaurant'):f.role,type:f.role==='produce'?'Fruit & Vegetable Vendor':f.role==='event'?'Event Management Team':f.type};
   await act(()=>reg?db.register({pw:'',name:'',email:'',...data}):db.login(f.email||'',f.pw||'',admin));
   setBusy(false);
  };
@@ -127,13 +127,14 @@ function Auth({mode,act,done,go}){
     <select value={f.role} onChange={s('role')}>
      <option value="customer">Customer</option>
      <option value="business">Business</option><option value="produce">Fruit &amp; Vegetable Vendor</option>
-     <option value="ngo">NGO</option>
+     <option value="ngo">NGO</option><option value="event">Event Management Team</option><option value="household">Household / Private Function Donor</option>
     </select>
    </F>
-   <F l={vendor?'Business name':f.role==='ngo'?'Organisation name':'Full name'}>
+   <F l={eventTeam?'Organization / team name':vendor?'Business name':f.role==='ngo'?'Organisation name':'Full name'}>
     <input required onChange={s('name')}/>
    </F>
    <F l="Phone"><input required={vendor} type="tel" onChange={s('phone')}/></F>
+  {reg&&household&&<F l="Pickup area / locality"><input required onChange={s('address')} placeholder="Enter your area or locality"/></F>}
    {biz&&<>
     <F l="Business type">
      <select required value={f.type} onChange={s('type')}>
@@ -152,7 +153,7 @@ function Auth({mode,act,done,go}){
   </F>
   {reg&&vendor&&<>
    <p className="hint">Your application stays Pending until an admin approves it.</p>
-   <F l="Owner / contact person"><input required onChange={s('contact')}/></F>
+   <F l={eventTeam?"Authorized representative":"Owner / contact person"}><input required onChange={s('contact')}/></F>
    <F l="Business address and location"><input required onChange={s('address')}/></F>
    <F l="Registration / licence number"><input required onChange={s('licence')}/></F>
    <F l="Supporting document (PDF or image)">
@@ -160,13 +161,14 @@ function Auth({mode,act,done,go}){
    </F>
    <p className="hint">Max 500 KB. Only you and admins can read it.</p>
   </>}
+  {reg&&household&&<label className="chk"><input required type="checkbox" onChange={e=>setF({...f,householdTerms:e.target.checked})}/> I have read and agree to FOODLINK Terms &amp; Conditions and accept responsibility for the safety and accurate description of the food I share.</label>}
   <button disabled={busy}>{admin?'Sign in':reg?'Register':'Log in'}</button>
   {!admin&&<p className="hint">{reg?'Have an account? ':'New here? '}<a href="#s" onClick={e=>{e.preventDefault();go(reg?'login':'register')}}>{reg?'Log in':'Register'}</a></p>}
  </form>;
 }
 
 function Card({l,children,ngo=false}){const produce=l.listingType==='produce';return <article className="card">{l.img&&<img src={l.img} alt={l.name}/>}<h3>{l.name}</h3><p className="muted">{l.bizName} · {l.location}</p><p>{l.desc}</p>
- {!ngo&&<p><s>{l.orig.toFixed(2)}</s> <b className="price">{l.price.toFixed(2)}</b> · {l.qty} {produce?'kg':'left'}</p>}
+ {!ngo&&<p>{l.pricingType==='sharing'?<b className="price">Sharing price: ₹{l.price.toFixed(2)}</b>:<><s>₹{l.orig.toFixed(2)}</s> <b className="price">₹{l.price.toFixed(2)}</b></>} · {l.qty} {produce?'kg':'left'}</p>}
  <p className="small">{produce?`Harvested ${fmt(l.harvestDate)}`:`Made ${fmt(l.made)}`} · Collect by {fmt(l.deadline)}{l.useBy?` · Use by ${fmt(l.useBy)}`:''}</p>
  <p className="small">{!produce&&<><b>Allergens:</b> {l.allergens}. </>}<b>Storage:</b> {l.storage||'Not stated; ask the provider'}.</p><p className="small safe">Food safety is the provider's responsibility. Check details before collecting.</p>{children}</article>}
 
@@ -229,25 +231,25 @@ function Consent({onYes,onNo}){const [c,setC]=useState(CONSENTS.map(()=>false));
 
 function Biz({u,act,flash}){
  const [tab,setTab]=useState('l'),[f,setF]=useState({category:'Meals'});const s=k=>e=>setF({...f,[k]:e.target.value});
- if(u.status!=='approved')return <div className="card narrow"><h2>Application {u.status}</h2><p>{u.status==='pending'?'An admin is reviewing your application. You can publish food once it is approved.':u.status==='rejected'?'Your application was rejected.':'Your account is suspended.'}</p>{u.feedback&&<p><b>Admin feedback:</b> {u.feedback}</p>}</div>;
+ if(u.status!=='approved'&&u.role!=='household')return <div className="card narrow"><h2>Application {u.status}</h2><p>{u.status==='pending'?'An admin is reviewing your application. You can publish food once it is approved.':u.status==='rejected'?'Your application was rejected.':'Your account is suspended.'}</p>{u.feedback&&<p><b>Admin feedback:</b> {u.feedback}</p>}</div>;
  const d=db.load(),ls=d.listings.filter(l=>l.bizId===u.id),rs=d.reservations.filter(r=>r.bizId===u.id).reverse();
  const pub=async e=>{e.preventDefault();const T=k=>f[k]?new Date(f[k]).getTime():0;if(await act(()=>db.saveListing(u,{...f,category:u.role==='produce'?'Produce':f.category,made:T('made'),harvestDate:T('harvestDate'),deadline:T('deadline'),useBy:T('useBy')||null})))flash('Listing published.')};
  const img=e=>{const x=e.target.files[0];if(!x)return;if(x.size>5e5){flash('Image must be under 500 KB in demo mode.',true);return}const r=new FileReader();r.onload=()=>setF(prev=>({...prev,img:r.result}));r.onerror=()=>flash('Could not read this image. Please try another.',true);r.readAsDataURL(x)};
- return <><div className="tabs"><button className={tab==='l'?'on':''} onClick={()=>setTab('l')}>Listings</button><button className={tab==='r'?'on':''} onClick={()=>setTab('r')}>Reservations ({rs.filter(r=>r.status==='pending').length} new)</button></div>
+ return <>{u.role==='household'?<h2>Household / Private Function Dashboard</h2>:u.role==='event'?<h2>Event Management Team Dashboard</h2>:<h2>Provider Dashboard</h2>}<div className="tabs"><button className={tab==='l'?'on':''} onClick={()=>setTab('l')}>Listings</button><button className={tab==='r'?'on':''} onClick={()=>setTab('r')}>Reservations ({rs.filter(r=>r.status==='pending').length} new)</button></div>
  {tab==='l'&&<><form className="card narrow" onSubmit={pub}><h3>New surplus listing</h3><F l="Food name"><input required onChange={s('name')}/></F><F l="Description"><textarea required onChange={s('desc')}/></F>{u.role==='produce'?<F l="Category"><input value="Produce" readOnly/></F>:<F l="Category"><select value={f.category} onChange={s('category')}>{CATS.map(c=><option key={c}>{c}</option>)}</select></F>}
-  <F l={u.role==='produce'?'Quantity (whole kg)':'Quantity'}><input required type="number" min="1" step="1" onChange={s('qty')}/></F><F l="Original price (₹)"><input required type="number" min="0" step="0.01" onChange={s('orig')}/></F><F l="Discounted price (₹)"><input required type="number" min="0" step="0.01" onChange={s('price')}/></F>
+  <F l={u.role==='produce'?'Quantity (whole kg)':'Quantity'}><input required type="number" min="1" step="1" onChange={s('qty')}/></F>{u.role==='household'?<F l="Sharing price (₹)"><input required type="number" min="0" step="0.01" onChange={s('price')}/></F>:<><F l="Original price (₹)"><input required type="number" min="0.01" step="0.01" onChange={s('orig')}/></F><F l="Discounted price (₹)"><input required type="number" min="0" step="0.01" onChange={s('price')}/></F></>}
   {u.role==='produce'?<F l="Harvest date"><input required type="date" onChange={s('harvestDate')}/></F>:<><F l="Prepared at"><input required type="datetime-local" onChange={s('made')}/></F><F l="Use-by (optional)"><input type="datetime-local" onChange={s('useBy')}/></F><F l="Allergens (required)"><input required placeholder="e.g. Gluten, milk, or None" onChange={s('allergens')}/></F></>}
   <F l="Pickup deadline"><input required type="datetime-local" onChange={s('deadline')}/></F><F l="Storage instructions"><input onChange={s('storage')}/></F><F l="Photo (under 500 KB)"><input type="file" accept="image/*" onChange={img}/></F>{f.img&&<img src={f.img} alt="Selected food preview" style={{width:'100%',maxHeight:220,objectFit:'cover',borderRadius:12,marginBottom:16}}/>}<button>Publish listing</button></form>
   {ls.length?ls.map(l=><div className="card row" key={l.id}><div><b>{l.name}</b> · {l.qty} {u.role==='produce'?'kg':'left'} · {l.status}<p className="small">Deadline {fmt(l.deadline)}</p></div><div><button className="ghost" onClick={()=>{const q=+prompt('New available quantity',l.qty);if(q>=0)act(()=>db.setListing(u,l.id,{qty:q}))}}>Edit qty</button><button className="ghost" onClick={()=>act(()=>db.setListing(u,l.id,{status:l.status==='active'?'paused':'active'}))}>{l.status==='active'?'Pause':'Resume'}</button><button className="ghost" onClick={()=>act(()=>db.setListing(u,l.id,'delete'))}>Delete</button></div></div>):<p className="empty">No listings yet. Publish your first surplus item above.</p>}</>}
  {tab==='r'&&(rs.length?rs.map(r=><div className="card row" key={r.id}><div><b>{r.name}</b> × {r.qty} for {r.userName} ({r.kind})<p className="small">{fmt(r.at)}</p></div><div><span className={'st '+r.status}>{r.status}</span>{r.status==='pending'&&<button onClick={()=>act(()=>db.setRes(u,r.id,'confirmed'))}>Confirm</button>}{r.status==='confirmed'&&<button onClick={()=>act(()=>db.setRes(u,r.id,'collected'))}>Mark collected</button>}{['pending','confirmed'].includes(r.status)&&<button className="ghost" onClick={()=>act(()=>db.setRes(u,r.id,'cancelled'))}>Cancel</button>}</div></div>):<p className="empty">No reservations yet.</p>)}</>}
 
 function Admin({u,act}){
- const d=db.load(),[why,setWhy]=useState({});const biz=d.users.filter(x=>['restaurant','bakery','produce'].includes(x.role)),pend=biz.filter(x=>x.status==='pending');
+ const d=db.load(),[why,setWhy]=useState({});const biz=d.users.filter(x=>['restaurant','bakery','produce','event'].includes(x.role)),pend=biz.filter(x=>x.status==='pending');
  const stat=[['Users',d.users.length],['Pending applications',pend.length],['Active listings',d.listings.filter(l=>l.status==='active').length],['Reservations / requests',d.reservations.length]];
  return <><div className="grid">{stat.map(([a,b])=><div className="card" key={a}><h3>{b}</h3><p>{a}</p></div>)}</div>
  <h2>Applications awaiting review ({pend.length})</h2>{pend.length?pend.map(x=><div className="card" key={x.id}><b>{x.name}</b> ({x.role}) · {x.email} · {x.phone}<p className="small">Contact: {x.biz.contact} · {x.biz.address} · Type: {x.biz.type} · Licence: {x.biz.licence} · Document: {x.biz.docs} {d.docs.find(z=>z.id===x.id)?<a download={x.biz.docs} href={d.docs.find(z=>z.id===x.id).data}>Download</a>:null}</p>
   <input aria-label="Rejection reason" placeholder="Reason (required to reject)" value={why[x.id]||''} onChange={e=>setWhy({...why,[x.id]:e.target.value})}/><button onClick={()=>act(()=>db.decide(u,x.id,'approved',''))}>Approve</button><button className="ghost" onClick={()=>act(()=>db.decide(u,x.id,'rejected',why[x.id]))}>Reject</button></div>):<p className="empty">No pending applications.</p>}
- <h2>Users</h2>{d.users.filter(x=>x.role!=='admin').map(x=><div className="card row" key={x.id}><div>{x.name} · {x.role} · {x.email}</div><div><span className={'st '+x.status}>{x.status}</span>{x.status==='suspended'?<button className="ghost" onClick={()=>act(()=>db.decide(u,x.id,x.role==='customer'||x.role==='ngo'?'active':'approved',''))}>Reactivate</button>:<button className="ghost" onClick={()=>act(()=>db.decide(u,x.id,'suspended','Suspended by admin'))}>Suspend</button>}</div></div>)}
+ <h2>Users</h2>{d.users.filter(x=>x.role!=='admin').map(x=><div className="card row" key={x.id}><div>{x.name} · {x.role} · {x.email}</div><div><span className={'st '+x.status}>{x.status}</span>{x.status==='suspended'?<button className="ghost" onClick={()=>act(()=>db.decide(u,x.id,['customer','ngo','household'].includes(x.role)?'active':'approved',''))}>Reactivate</button>:<button className="ghost" onClick={()=>act(()=>db.decide(u,x.id,'suspended','Suspended by admin'))}>Suspend</button>}</div></div>)}
  <h2>Listings</h2>{d.listings.map(l=><div className="card row" key={l.id}><div>{l.name} · {l.bizName} · {l.qty} left</div><button className="ghost" onClick={()=>act(()=>db.setListing(u,l.id,'delete'))}>Remove</button></div>)}
  <h2>Reservations and NGO requests</h2>{d.reservations.length?d.reservations.map(r=><div className="card" key={r.id}>{r.kind}: {r.name} × {r.qty} · {r.userName} → {r.bizName} · <span className={'st '+r.status}>{r.status}</span></div>):<p className="empty">None yet.</p>}
  <h2>Reports ({d.reports.filter(r=>r.status==='open').length} open)</h2>{d.reports.length?d.reports.map(r=><div className="card row" key={r.id}><div>Listing {r.listingId}: {r.reason}<p className="small">{r.status}</p></div>{r.status==='open'&&<button className="ghost" onClick={()=>act(()=>db.resolveReport(u,r.id))}>Mark resolved</button>}</div>):<p className="empty">No reports.</p>}</>}
