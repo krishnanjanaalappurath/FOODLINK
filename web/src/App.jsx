@@ -165,18 +165,18 @@ function Auth({mode,act,done,go}){
  </form>;
 }
 
-function Card({l,children}){const produce=l.listingType==='produce';return <article className="card">{l.img&&<img src={l.img} alt={l.name}/>}<h3>{l.name}</h3><p className="muted">{l.bizName} · {l.location}</p><p>{l.desc}</p>
- <p><s>{l.orig.toFixed(2)}</s> <b className="price">{l.price.toFixed(2)}</b> · {l.qty} {produce?'kg':'left'}</p>
+function Card({l,children,ngo=false}){const produce=l.listingType==='produce';return <article className="card">{l.img&&<img src={l.img} alt={l.name}/>}<h3>{l.name}</h3><p className="muted">{l.bizName} · {l.location}</p><p>{l.desc}</p>
+ {!ngo&&<p><s>{l.orig.toFixed(2)}</s> <b className="price">{l.price.toFixed(2)}</b> · {l.qty} {produce?'kg':'left'}</p>}
  <p className="small">{produce?`Harvested ${fmt(l.harvestDate)}`:`Made ${fmt(l.made)}`} · Collect by {fmt(l.deadline)}{l.useBy?` · Use by ${fmt(l.useBy)}`:''}</p>
  <p className="small">{!produce&&<><b>Allergens:</b> {l.allergens}. </>}<b>Storage:</b> {l.storage||'Not stated; ask the provider'}.</p><p className="small safe">Food safety is the provider's responsibility. Check details before collecting.</p>{children}</article>}
 
 function Shop({u,act,flash}){
  const [tab,setTab]=useState('browse'),[q,setQ]=useState(''),[cat,setCat]=useState(''),[max,setMax]=useState(''),[ask,setAsk]=useState(null);const ngo=u.role==='ngo';
- const ls=db.listings().filter(l=>(l.name+l.bizName+l.location).toLowerCase().includes(q.toLowerCase())&&(!cat||l.category===cat)&&(!max||l.price<=+max));
+ const ls=db.listings().filter(l=>(l.name+l.bizName+l.location).toLowerCase().includes(q.toLowerCase())&&(!cat||l.category===cat)&&(ngo||!max||l.price<=+max));
  const mine=db.load().reservations.filter(r=>r.userId===u.id).reverse();
  const go=async(l,n)=>{if(!db.hasConsent(u.id))return setAsk({l,n});if(await act(()=>db.reserve(u,l.id,n)))flash(ngo?'Request sent.':'Reserved. Pickup details are under Orders.')};
  return <><div className="tabs"><button className={tab==='browse'?'on':''} onClick={()=>setTab('browse')}>Browse food</button><button className={tab==='orders'?'on':''} onClick={()=>setTab('orders')}>{ngo?'My requests':'My orders'}</button><button className={tab==='me'?'on':''} onClick={()=>setTab('me')}>Profile</button></div>
- {tab==='browse'&&<><div className="filters"><input aria-label="Search by name or location" placeholder="Search name or location" value={q} onChange={e=>setQ(e.target.value)}/><select aria-label="Category" value={cat} onChange={e=>setCat(e.target.value)}><option value="">All types</option>{CATS.map(c=><option key={c}>{c}</option>)}</select><input aria-label="Max price" type="number" min="0" placeholder="Max price" value={max} onChange={e=>setMax(e.target.value)}/></div>
+ {tab==='browse'&&<><div className="filters"><input aria-label="Search by name or location" placeholder="Search name or location" value={q} onChange={e=>setQ(e.target.value)}/><select aria-label="Category" value={cat} onChange={e=>setCat(e.target.value)}><option value="">All types</option>{CATS.map(c=><option key={c}>{c}</option>)}</select>{!ngo&&<input aria-label="Max price" type="number" min="0" placeholder="Max price" value={max} onChange={e=>setMax(e.target.value)}/>}</div>
   {ls.length?<div className="grid">{ls.map(l=><Item key={l.id} l={l} ngo={ngo} go={go} rep={async()=>{const r=prompt('Describe the problem with this listing');if(r&&await act(()=>db.report(u,l.id,r)))flash('Report sent to admins.')}}/>)}</div>:<p className="empty">Nothing matches. Try clearing filters or check back soon.</p>}</>}
  {tab==='orders'&&(mine.length?mine.map(r=><div className="card row" key={r.id}><div><b>{r.name}</b> × {r.qty} · {r.total.toFixed(2)}<p className="small">{r.bizName} · {fmt(r.at)}<br/>Pickup: {r.pickup}</p></div><div><span className={'st '+r.status}>{r.status}</span>{['pending','confirmed'].includes(r.status)&&<button className="ghost" onClick={()=>act(()=>db.setRes(u,r.id,'cancelled'))}>Cancel</button>}</div></div>):<p className="empty">No {ngo?'requests':'orders'} yet. Browse food to get started.</p>)}
  {tab==='me'&&<Profile u={u} act={act} flash={flash}/ >}
@@ -221,7 +221,7 @@ function Profile({u,act,flash}){
  </div>;
 }
 
-function Item({l,ngo,go,rep}){const [n,setN]=useState(1);return <Card l={l}><div className="row"><input aria-label="Quantity" type="number" min="1" max={l.qty} value={n} onChange={e=>setN(e.target.value)} style={{width:70}}/><button onClick={()=>go(l,n)}>{ngo?'Request':'Reserve'}</button><button className="ghost" onClick={rep}>Report</button></div></Card>}
+function Item({l,ngo,go,rep}){const [n,setN]=useState(1);return <Card l={l} ngo={ngo}><div className="row"><input aria-label="Quantity" type="number" min="1" max={l.qty} value={n} onChange={e=>setN(e.target.value)} style={{width:70}}/><button onClick={()=>go(l,n)}>{ngo?'Request':'Reserve'}</button><button className="ghost" onClick={rep}>Report</button></div></Card>}
 function Consent({onYes,onNo}){const [c,setC]=useState(CONSENTS.map(()=>false));return <div className="modal" role="dialog" aria-modal="true" aria-label="Consent"><div className="card"><h2>Before your first reservation</h2><Disc/>
  {CONSENTS.map((x,i)=><label className="chk" key={i}><input type="checkbox" checked={c[i]} onChange={()=>setC(c.map((v,j)=>j===i?!v:v))}/> {x}</label>)}
  <p className="hint">Read the full <a href="#t">Terms</a> and <a href="#p">Privacy Policy</a> (add your real pages). Your consent is stored with your account, a timestamp and the policy version.</p>
