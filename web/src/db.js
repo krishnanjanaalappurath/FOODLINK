@@ -8,13 +8,13 @@ const cfg={apiKey:e.VITE_FIREBASE_API_KEY,authDomain:e.VITE_FIREBASE_AUTH_DOMAIN
 export const configured=!!(cfg.apiKey&&cfg.projectId&&cfg.appId);
 export const DEMO=false,CONSENT_VERSION='2026-11-v1';
 let auth,fs;if(configured){const app=initializeApp(cfg);auth=getAuth(app);fs=getFirestore(app)}
-const C={users:[],listings:[],reservations:[],consents:[],reports:[],docs:[]};
+const C={users:[],listings:[],reservations:[],contacts:[],consents:[],reports:[],docs:[]};
 let me=null,isReady=false,ls={pub:[],own:[]},subs=[],fns=new Set(),gen=0,registering=false,started=false;
 const ms=v=>v?.toMillis?v.toMillis():(v||Date.now());
 const emit=()=>{C.listings=[...new Map([...ls.pub,...ls.own].map(x=>[x.id,x])).values()];fns.forEach(f=>f())};
 const rows=(s,fix=x=>x)=>s.docs.map(d=>fix({...d.data(),id:d.id}));
 const watch=(q,cb)=>subs.push(onSnapshot(q,s=>{cb(s);emit()},err=>console.error('Firestore:',err.code,err.message)));
-const stop=()=>{subs.forEach(u=>u());subs=[];ls={pub:[],own:[]};Object.assign(C,{users:[],reservations:[],consents:[],reports:[],docs:[]})};
+const stop=()=>{subs.forEach(u=>u());subs=[];ls={pub:[],own:[]};Object.assign(C,{users:[],reservations:[],contacts:[],consents:[],reports:[],docs:[]})};
 const fixRes=x=>({...x,at:ms(x.at),total:x.qty*x.price});
 async function start(user){
  const g=++gen;stop();const col=n=>collection(fs,n);
@@ -29,8 +29,8 @@ async function start(user){
  watch(doc(fs,'users',user.uid),s=>{me=s.exists()?{...s.data(),id:s.id}:null;C.users=me?[me]:[]});
  watch(query(col('listings'),where('status','==','active')),s=>ls.pub=rows(s));
  watch(query(col('consents'),where('userId','==',user.uid)),s=>C.consents=rows(s));
- if(biz){watch(query(col('listings'),where('bizId','==',user.uid)),s=>ls.own=rows(s));watch(query(col('reservations'),where('bizId','==',user.uid)),s=>C.reservations=rows(s,fixRes))}
- else watch(query(col('reservations'),where('userId','==',user.uid)),s=>C.reservations=rows(s,fixRes));
+ if(biz){watch(query(col('listings'),where('bizId','==',user.uid)),s=>ls.own=rows(s));watch(query(col('reservations'),where('bizId','==',user.uid)),s=>C.reservations=rows(s,fixRes));watch(query(col('reservationContacts'),where('bizId','==',user.uid),where('status','==','confirmed')),s=>C.contacts=rows(s))}
+ else {watch(query(col('reservations'),where('userId','==',user.uid)),s=>C.reservations=rows(s,fixRes));watch(query(col('reservationContacts'),where('userId','==',user.uid),where('status','==','confirmed')),s=>C.contacts=rows(s))};
  me={...prof.data(),id:user.uid};C.users=[me];isReady=true;emit()}
 export function subscribe(f){fns.add(f);if(configured&&!started){started=true;onAuthStateChanged(auth,u=>{if(!registering)start(u)})}return()=>fns.delete(f)}
 export const load=()=>C,session=()=>me,ready=()=>isReady;
@@ -43,7 +43,7 @@ export const logout=()=>auth&&signOut(auth);
 
 export async function register(f){const em=f.email.trim().toLowerCase(),biz=['restaurant','bakery','produce','event'].includes(f.role),household=f.role==='household';
  need(['customer','restaurant','bakery','produce','ngo','event','household'].includes(f.role),'Choose a valid account type.'); // admin can never self-register
- need(/^\S+@\S+\.\S+$/.test(em),'Enter a valid email.');need(f.pw.length>=8,'Password needs 8+ characters.');need(f.name.trim(),'Name is required.');
+ need(/^\S+@\S+\.\S+$/.test(em),'Enter a valid email.');need(f.pw.length>=8,'Password needs 8+ characters.');need(f.name.trim(),'Name is required.');need(f.phone?.trim(),'Phone number is required.');need(f.phone.trim().length<=30,'Phone number is too long.');
  if(biz){for(const k of['contact','phone','address','type','licence'])need(f[k]?.trim(),`Business field missing: ${k}.`);need(f.file,'Attach a supporting document.')}
  if(household)need(f.householdTerms===true,'Please agree to the FOODLINK Terms & Conditions.');
  const data=biz?await readFile(f.file,5e5):null;registering=true;let cred;
@@ -71,22 +71,23 @@ export async function saveListing(u,f){
  need(u.role==='produce'||f.allergens?.trim(),'Allergens are required for prepared food listings.');
  need(Number.isInteger(qty)&&qty>0&&(household?price>=0:orig>0&&price>=0&&price<=orig),'Check quantity and prices.');
  need(f.deadline>Date.now(),'Pickup deadline must be in the future.');
- await addDoc(collection(fs,'listings'),{bizId:u.id,bizName:u.name,location:u.biz?.address||'',status:'active',listed:Date.now(),name:f.name.trim(),desc:f.desc.trim(),category:f.category||'Other',qty,orig,price,pricingType:household?'sharing':'discounted',listingType:u.role==='produce'?'produce':'prepared',qtyUnit:u.role==='produce'?'kg':'items',made:u.role==='produce'?0:(f.made||0),harvestDate:u.role==='produce'?(f.harvestDate||null):null,deadline:f.deadline,useBy:u.role==='produce'?null:(f.useBy||null),allergens:u.role==='produce'?'':(f.allergens||'').trim(),storage:f.storage||'',img:f.img||null,createdAt:serverTimestamp()})
+ console.log('FOODLINK LISTING DEBUG',u,f,{qty,orig,price,location:u.biz?.address||''});await addDoc(collection(fs,'listings'),{bizId:u.id,bizName:u.name,location:u.biz?.address||'',status:'active',listed:Date.now(),name:f.name.trim(),desc:f.desc.trim(),category:f.category||'Other',qty,orig,price,pricingType:household?'sharing':'discounted',listingType:u.role==='produce'?'produce':'prepared',qtyUnit:u.role==='produce'?'kg':(f.qtyUnit||'servings'),made:u.role==='produce'?0:(f.made||0),harvestDate:u.role==='produce'?(f.harvestDate||null):null,deadline:f.deadline,useBy:u.role==='produce'?null:(f.useBy||null),allergens:u.role==='produce'?'':(f.allergens||'').trim(),storage:f.storage||'',img:f.img||null,createdAt:serverTimestamp()})
 }
 export async function setListing(u,id,p){const r=doc(fs,'listings',id);if(p==='delete')return deleteDoc(r);
  if('qty' in p)need(Number.isInteger(p.qty)&&p.qty>=0,'Quantity must be a whole number, 0 or more.');await updateDoc(r,p)}
 export async function consent(u){if(hasConsent(u.id))return;await setDoc(doc(fs,'consents',`${u.id}_${CONSENT_VERSION}`),{userId:u.id,version:CONSENT_VERSION,at:serverTimestamp()})}
 export async function reserve(u,id,qty){qty=+qty;
  need(['customer','ngo'].includes(u.role),'Only customers and NGOs can reserve.');need(hasConsent(u.id),'Consent required.');need(Number.isInteger(qty)&&qty>0,'Enter a whole quantity.');
- const lr=doc(fs,'listings',id),rr=doc(collection(fs,'reservations'));
- await runTransaction(fs,async tx=>{const s=await tx.get(lr);need(s.exists(),'Listing is no longer available.');const l=s.data();
-  need(l.status==='active'&&l.deadline>Date.now(),'Listing is no longer available.');need(qty<=l.qty,`Only ${l.qty} left.`);
+ const lr=doc(fs,'listings',id),rr=doc(collection(fs,'reservations')),cr=doc(fs,'reservationContacts',rr.id);
+ console.log('FOODLINK RESERVATION DEBUG',u,id,qty);await runTransaction(fs,async tx=>{const s=await tx.get(lr);need(s.exists(),'Listing is no longer available.');const l=s.data();
+  need(l.status==='active'&&l.deadline>Date.now(),'Listing is no longer available.');need(qty<=l.qty,`Only ${l.qty} ${l.qtyUnit||(l.listingType==='produce'?'kg':'items')} available.`);
   tx.update(lr,{qty:l.qty-qty,lastRes:rr.id});
-  tx.set(rr,{listingId:id,bizId:l.bizId,bizName:l.bizName,name:l.name,price:u.role==='ngo'?0:l.price,userId:u.id,userName:u.name,kind:u.role==='ngo'?'request':'reservation',qty,status:'pending',pickup:`${l.location} before ${new Date(l.deadline).toLocaleString()}`,at:serverTimestamp()})})}
-export async function setRes(u,id,status){const rr=doc(fs,'reservations',id);
+  tx.set(rr,{listingId:id,bizId:l.bizId,bizName:l.bizName,name:l.name,price:u.role==='ngo'?0:l.price,userId:u.id,userName:u.name,kind:u.role==='ngo'?'request':'reservation',qty,qtyUnit:l.qtyUnit||(l.listingType==='produce'?'kg':'items'),status:'pending',pickup:`${l.location} before ${new Date(l.deadline).toLocaleString()}`,at:serverTimestamp()});tx.set(cr,{userId:u.id,bizId:l.bizId,status:'pending',customerPhone:u.phone||'',providerPhone:''})})}
+export async function setRes(u,id,status){const rr=doc(fs,'reservations',id),cr=doc(fs,'reservationContacts',id);
  await runTransaction(fs,async tx=>{const s=await tx.get(rr);need(s.exists(),'Not found.');const r=s.data();
   need((r.status==='pending'&&['confirmed','cancelled'].includes(status))||(r.status==='confirmed'&&['collected','cancelled'].includes(status)),`Cannot change from ${r.status} to ${status}.`);
-  if(status==='cancelled'){const lr=doc(fs,'listings',r.listingId),ln=await tx.get(lr);if(ln.exists())tx.update(lr,{qty:ln.data().qty+r.qty,lastRes:id})} // restores stock once: status leaves pending/confirmed in the same transaction
+  if(status==='confirmed'){need(u.id===r.bizId&&u.phone?.trim(),'Provider phone number is required.');tx.update(cr,{status:'confirmed',providerPhone:u.phone.trim()})}
+  if(status==='cancelled'){const lr=doc(fs,'listings',r.listingId),ln=await tx.get(lr);if(ln.exists())tx.update(lr,{qty:ln.data().qty+r.qty,lastRes:id})}
   tx.update(rr,{status,updatedAt:serverTimestamp()})})}
 export async function decide(u,id,status,feedback){need(u.role==='admin','Admins only.');if(status==='rejected')need(feedback?.trim(),'Give a reason for rejection.');
  const b=writeBatch(fs);b.update(doc(fs,'users',id),{status,feedback:feedback||''});
@@ -100,7 +101,7 @@ export async function saveProfile(u,f){
  const name=(f.name||'').trim(),phone=(f.phone||'').trim();
  need(u?.id&&['customer','ngo'].includes(u.role),'Invalid profile.');
  need(name.length>0&&name.length<=100,'Enter a name (maximum 100 characters).');
- need(phone.length<=30,'Phone number is too long.');
+ need(phone.length>0,'Phone number is required.');need(phone.length<=30,'Phone number is too long.');
  need(avatars.includes(f.avatar),'Choose a valid avatar.');
  await updateDoc(doc(fs,'users',u.id),{name,phone,avatar:f.avatar});
 }
